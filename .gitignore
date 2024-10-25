@@ -1,0 +1,7 @@
+/target
+/build
+
+# Emacs stuff that I copy pasted from the internet
+*~
+\#*\#
+.\#*
