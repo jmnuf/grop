@@ -9,7 +9,7 @@ This is what this can do:
  [x] Search current directory's files for a specific query string
  [x] Query can be case insensitive (`-i` flag)
  [x] Disable coloring if it bothers you for something (`-0` flag)
- [ ] Recursively go through the directory's subdirectories (TODO)
+ [x] Recursively go through the directory's subdirectories (`-r` flag)
  [ ] Be able to use simple regex like original grep (TODO)
  [ ] Only display matched string without context (TODO)
 
