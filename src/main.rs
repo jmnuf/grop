@@ -150,6 +150,7 @@ fn search_for_query(grog: &mut Grog) -> Option<DirReadFailed> {
     }
     const START_PADDING:isize = 20isize;
     const END_PADDING:usize = 35usize;
+    let query_len = grog.query.len();
 
     let mut subdirs = Vec::new();
     
@@ -165,7 +166,7 @@ fn search_for_query(grog: &mut Grog) -> Option<DirReadFailed> {
 			    if grog.verbose {
 				inf_log!("Ignoring dot folder: {}", entry_path.display());
 			    }
-			} else {
+			} else if grog.recursive {
 			    subdirs.push(entry_path);
 			}
 		    }
@@ -207,16 +208,22 @@ fn search_for_query(grog: &mut Grog) -> Option<DirReadFailed> {
 		} else {
 		    line.unwrap()
 		};
-		if let Some(x) = line.find(&grog.query) {
+		let line_len = line.len();
+		let mut lcpy = line.clone();
+		let mut j = 0usize;
+		while let Some(x) = lcpy.find(&grog.query) {
+		    lcpy.drain(..(x+query_len));
+		    let x = if j == 0 { j + x } else { j + x };
+		    j = cmp::min(x + query_len, line_len);
 		    let x = x as isize;
 		    let i = cmp::max(0isize, x - START_PADDING) as usize;
 		    let x = x as usize;
 		    let preface = &line[i..x];
 		    let preface = if i > 0 { format!("...{}", preface) } else { String::from(preface) };
-		    let i = x + grog.query.len();
+		    let i = x + query_len;
 		    let showcase = &line[x..i];
 		    let x = i;
-		    let i = cmp::min(x + grog.query.len() + END_PADDING, line.len());
+		    let i = cmp::min(x + query_len + END_PADDING, line_len);
 		    let posface = &line[x..i];
 		    let posface = if i < line.len() { format!("{}...", posface) } else { String::from(posface) };
 		    let x = x + 1;
