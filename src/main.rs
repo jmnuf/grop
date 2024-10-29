@@ -16,13 +16,13 @@ macro_rules! inf_log {
 }
 
 fn usage(program_path: &PathBuf) {
-    println!("Usage:");
-    println!("  {} [-v] [-i] [-0] <query>", program_path.display());
-    println!("  {} [-iv0] <query>", program_path.display());
-    println!("    -v         - Optional: Add some logging");
-    println!("    -i         - Optional: Ignore casing when searching");
-    println!("    -0         - Optional: Remove coloring of match showcased");
-    println!("    <query>    - Required: Query string to look for");
+    println!("Usage: {} [FLAGS] <query>", program_path.display());
+    println!("Example:  {} [-i0] moo", program_path.display());
+    println!("    <query>    - Query string to look for");
+    println!("    -v         - Flag to add some logging");
+    println!("    -i         - Flag to ignore casing when searching");
+    println!("    -0         - Flag for removing coloring of matches");
+    println!("    -h         - Displays this help message");
 }
 
 fn main() -> ExitCode {
@@ -42,6 +42,10 @@ fn main() -> ExitCode {
     let mut no_colors = false;
     while let Some(arg) = args.next() {
 	i += 1;
+	if arg == "-h" || arg == "--help" || arg == "/?" {
+	    usage(&program_path);
+	    return ExitCode::SUCCESS;
+	}
 	if arg == "-v" {
 	    verbose = true;
 	    continue;
@@ -54,6 +58,7 @@ fn main() -> ExitCode {
 	    no_colors = true;
 	    continue;
 	}
+
 	{
 	    let arg = arg.to_string_lossy().to_string();
 	    if arg.starts_with("-") {
