@@ -15,12 +15,25 @@ macro_rules! inf_log {
     ($msg: expr, $($args:expr),+) => (println!("> {}", format!($msg, $($args),+)));
 }
 
+#[derive(Debug, Default)]
+struct Grog {
+    query: String,
+    haystacks: Vec<PathBuf>,
+    verbose: bool,
+
+    ignore_case: bool,
+    recursive: bool,
+    
+    no_colors: bool,
+}
+
 fn usage(program_path: &PathBuf) {
     println!("Usage: {} [FLAGS] <query>", program_path.display());
-    println!("Example:  {} [-i0] moo", program_path.display());
+    println!("Example:  {} -ri0 jajaja", program_path.display());
     println!("    <query>    - Query string to look for");
     println!("    -v         - Flag to add some logging");
     println!("    -i         - Flag to ignore casing when searching");
+    println!("    -r         - Flag to recursively search subdirectories for query");
     println!("    -0         - Flag for removing coloring of matches");
     println!("    -h         - Displays this help message");
 }
@@ -37,38 +50,26 @@ fn main() -> ExitCode {
     };
     let mut i = 0;
     let mut query = None;
-    let mut verbose = false;
-    let mut ignore_case = false;
-    let mut no_colors = false;
+    let mut grog = Grog::default();
     while let Some(arg) = args.next() {
 	i += 1;
 	if arg == "-h" || arg == "--help" || arg == "/?" {
 	    usage(&program_path);
 	    return ExitCode::SUCCESS;
 	}
-	if arg == "-v" {
-	    verbose = true;
-	    continue;
-	}
-	if arg == "-i" {
-	    ignore_case = true;
-	    continue;
-	}
-	if arg == "-0" {
-	    no_colors = true;
-	    continue;
-	}
-
+	
 	{
 	    let arg = arg.to_string_lossy().to_string();
+	    // TODO: Maybe write this in a better way?
 	    if arg.starts_with("-") {
 		for ch in arg.chars().skip(1) {
 		    match ch {
-			'v' => verbose = true,
-			'i' => ignore_case = true,
-			'0' => no_colors = true,
+			'v' => grog.verbose = true,
+			'i' => grog.ignore_case = true,
+			'r' => grog.recursive = true,
+			'0' => grog.no_colors = true,
 			_ => {
-			    err_log!("Unknown flag -{}", ch);
+			    err_log!("Unknown flag -{} in arg {}", ch, arg);
 			    return ExitCode::FAILURE;
 			},
 		    }
@@ -81,57 +82,101 @@ fn main() -> ExitCode {
 	}
     }
     let i = i;
-    let verbose = verbose;
-    let ignore_case = ignore_case;
-    let no_colors = no_colors;
     
     if query.is_none() {
 	err_log!("Must pass a search query as an argument!");
 	usage(&program_path);
 	return ExitCode::FAILURE;
     }
-    let query = query.unwrap();
-    let query = match query.into_string() {
-	Ok(q) => if ignore_case { q.to_lowercase() } else { q },
+    grog.query = match query.unwrap().into_string() {
+	Ok(q) => if grog.ignore_case { q.to_lowercase() } else { q },
 	Err(_) => {
 	    err_log!("Unsupported query string, must be valid Unicode");
 	    return ExitCode::FAILURE;
 	},
     };
-    let query_len = query.len();
-    if verbose {
+    
+    if grog.verbose {
 	inf_log!("Received {} arguments", i);
-	inf_log!("Ignore casing: {}", ignore_case);
-	inf_log!("No coloring: {}", no_colors);
-	inf_log!("Querying: {:?}", query);
-	inf_log!("Query len: {}", query_len);
+	inf_log!("Ignore casing: {}", grog.ignore_case);
+	inf_log!("No coloring: {}", grog.no_colors);
+	inf_log!("Querying: {:?}", grog.query);
+	inf_log!("Query len: {}", grog.query.len());
+    }
+    if grog.haystacks.is_empty() {
+	grog.haystacks.push(current_dir);
     }
 
-    let dir_entries:Vec<_> = match current_dir.read_dir() {
+    let mut read_dirs = 0usize;
+    while !grog.haystacks.is_empty() {
+	if let Some(err) = search_for_query(&mut grog) {
+	    err_log!("{}", err);
+	} else {
+	    read_dirs += 1;
+	}
+    }
+    if read_dirs == 0 {
+	return ExitCode::FAILURE;
+    }
+
+    return ExitCode::SUCCESS;
+}
+
+#[derive(Debug)]
+struct DirReadFailed {
+    error: std::io::Error,
+    dir: PathBuf,
+}
+impl std::fmt::Display for DirReadFailed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+	write!(f, "Failed to read dir `{}`: {}", self.dir.display(), self.error)
+    }
+}
+impl std::error::Error for DirReadFailed {}
+
+// Technically the correct or idiomatic rust would be to return Result<(), DirReadFailed> but do I really need that? No, if you said yes you're blind
+fn search_for_query(grog: &mut Grog) -> Option<DirReadFailed> {
+    let dir = grog.haystacks.remove(0);
+    let dir_entries:Vec<_> = match dir.read_dir() {
 	Ok(x) => x.collect(),
 	Err(e) => {
-	    err_log!("Failed to read current dir\n    {}", e);
-	    return ExitCode::FAILURE;
+	    let error = DirReadFailed { error: e, dir: dir };
+	    return Some(error);
 	}
     };
-    if verbose {
+    if grog.verbose {
 	let entry_count = dir_entries.len();
 	inf_log!("Dir Entries Count: {}", entry_count);
     }
-    let start_padding = 20isize;
-    let end_padding = 35usize;
+    const START_PADDING:isize = 20isize;
+    const END_PADDING:usize = 35usize;
+
+    let mut subdirs = Vec::new();
+    
     for entry_result in dir_entries {
 	if let Ok(entry) = entry_result {
 	    let entry_path = entry.path();
 	    if ! entry_path.is_file() {
-		if verbose {
+		if entry_path.is_dir() {
+		    // We should always have a filename but if we don't we don't uhhh, move on with life
+		    if let Some(file_name) = entry_path.file_name() {
+			let file_name = file_name.to_string_lossy().to_string();
+			if file_name.starts_with(".") {
+			    if grog.verbose {
+				inf_log!("Ignoring dot folder: {}", entry_path.display());
+			    }
+			} else {
+			    subdirs.push(entry_path);
+			}
+		    }
+		} else if grog.verbose {
 		    inf_log!("Skipping non file entry: {}", entry_path.display());
 		}
 		continue;
 	    }
 	    if let Some(extension) = entry_path.extension() {
 		if extension == "bin" {
-		    if verbose {
+		    if grog.verbose {
 			let file_name = entry_path.file_name().unwrap().to_string_lossy();
 			inf_log!("> Skipping bin file (assuming binary): {}", file_name);
 		    }
@@ -141,7 +186,7 @@ fn main() -> ExitCode {
 	    let f = match fs::File::open(&entry_path) {
 		Ok(f) => f,
 		Err(e) => {
-		    if verbose {
+		    if grog.verbose {
 			err_log!("> Error when opening file: {}", e);
 		    }
 		    continue;
@@ -152,29 +197,31 @@ fn main() -> ExitCode {
 	    for line in f.lines() {
 		y += 1;
 		if let Err(e) = line {
-		    err_log!("Failed to read line {}: {}", y, e);
+		    if grog.verbose {
+			err_log!("Failed to read line {}: {}", y, e);
+		    }
 		    continue;
 		}
-		let line = if ignore_case {
+		let line = if grog.ignore_case {
 		    line.unwrap().to_lowercase()
 		} else {
 		    line.unwrap()
 		};
-		if let Some(x) = line.find(&query) {
+		if let Some(x) = line.find(&grog.query) {
 		    let x = x as isize;
-		    let i = cmp::max(0isize, x - start_padding) as usize;
+		    let i = cmp::max(0isize, x - START_PADDING) as usize;
 		    let x = x as usize;
 		    let preface = &line[i..x];
 		    let preface = if i > 0 { format!("...{}", preface) } else { String::from(preface) };
-		    let i = x + query_len;
+		    let i = x + grog.query.len();
 		    let showcase = &line[x..i];
 		    let x = i;
-		    let i = cmp::min(x + query_len + end_padding, line.len());
+		    let i = cmp::min(x + grog.query.len() + END_PADDING, line.len());
 		    let posface = &line[x..i];
 		    let posface = if i < line.len() { format!("{}...", posface) } else { String::from(posface) };
 		    let x = x + 1;
 		    // &line[0..x];
-		    let displayed = if no_colors {
+		    let displayed = if grog.no_colors {
 			format!("{}{}{}", preface, showcase, posface)
 		    } else {
 			format!("{}\x1b[36;1m{}\x1b[0m{}", preface, showcase, posface)
@@ -185,5 +232,7 @@ fn main() -> ExitCode {
 	}
     }
 
-    return ExitCode::SUCCESS;
+    grog.haystacks.append(&mut subdirs);
+
+    return None;
 }
