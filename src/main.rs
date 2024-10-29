@@ -95,6 +95,10 @@ fn main() -> ExitCode {
 	    return ExitCode::FAILURE;
 	},
     };
+    if grog.query.is_empty() {
+	err_log!("Query is empty, you cheeky bastard");
+	return ExitCode::FAILURE;
+    }
     
     if grog.verbose {
 	inf_log!("Received {} arguments", i);
