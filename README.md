@@ -1,8 +1,8 @@
 # Grop
 
 ## The Poor Mans Grep
-This is just a basic recreational remaking of some of grep's capabilities.
-Made mostly because I use windows and I like grep but I'm not changing to linux just for some utilities that I can literally build myself for some everyday life file searching.
+Started as a basic recreational remaking of some of grep's capabilities, but now I'm making it work to follow my own workflow.
+Made mostly because I use windows and I like grep but I'm not changing to linux just for some utilities that I can literally build myself for some everyday life file searching (file explorer is incredibly slow and terrible for searching for files).
 
 ## Functionality List
 I'm not making it do all the things grep can do, cause that's insane for a side-project.
@@ -11,6 +11,7 @@ So here's a list of what it can do and what I may make it do:
  - [x] Query can be case insensitive (`-i` flag)
  - [x] Disable coloring if it bothers you for something (`-0` flag)
  - [x] Recursively go through the directory's subdirectories (`-r` flag)
+ - [x] Search only file names, without looking into the contents (`-f` flag)
  - [ ] Ability to pass in directories as arguments for where to search (TODO)
  - [ ] Be able to use simple regex like original grep (TODO)
  - [ ] Only display matched string without context (TODO)
