@@ -187,95 +187,104 @@ fn search_for_query_in_file_contents(grog: &mut Grog) -> Option<DirReadFailed> {
     let mut subdirs = Vec::new();
 
     for entry_result in dir_entries {
-        if let Ok(entry) = entry_result {
-            let entry_path = entry.path();
-            if !entry_path.is_file() {
-                if entry_path.is_dir() {
-                    // We should always have a filename but if we don't we don't uhhh, move on with life
-                    if let Some(file_name) = entry_path.file_name() {
-                        let file_name = file_name.to_string_lossy().to_string();
-                        if file_name.starts_with(".") {
-                            if grog.verbose {
-                                inf_log!("Ignoring dot folder: {}", entry_path.display());
-                            }
-                        } else if grog.recursive {
-                            subdirs.push(entry_path);
-                        }
-                    }
-                } else if grog.verbose {
-                    inf_log!("Skipping non file entry: {}", entry_path.display());
-                }
-                continue;
-            }
-            if let Some(extension) = entry_path.extension() {
+        match entry_result {
+            Err(err) => err_log!("Failed to read dir entry: {}", err),
+            Ok(entry) => {
+                let entry_path = entry.path();
                 if grog.verbose {
-                    let file_name = entry_path.file_name().unwrap().to_string_lossy();
-                    inf_log!(
-                        "> Skipping file with ${} extention: {}",
-                        extension.to_string_lossy(),
-                        file_name
-                    );
+                    inf_log!("Checking entry: {}", entry_path.display());
                 }
-                continue;
-            }
-            let f = match fs::File::open(&entry_path) {
-                Ok(f) => f,
-                Err(e) => {
-                    if grog.verbose {
-                        err_log!("> Error when opening file: {}", e);
+                if !entry_path.is_file() {
+                    if entry_path.is_dir() {
+                        // We should always have a filename but if we don't we don't uhhh, move on with life
+                        if let Some(file_name) = entry_path.file_name() {
+                            let file_name = file_name.to_string_lossy().to_string();
+                            if file_name.starts_with(".") {
+                                if grog.verbose {
+                                    inf_log!("Ignoring dot folder: {}", entry_path.display());
+                                }
+                            } else if grog.recursive {
+                                subdirs.push(entry_path);
+                            }
+                        }
+                    } else if grog.verbose {
+                        inf_log!("Skipping non file entry: {}", entry_path.display());
                     }
                     continue;
                 }
-            };
-            let f = io::BufReader::new(f);
-            let mut y = 0;
-            for line in f.lines() {
-                y += 1;
-                if let Err(e) = line {
-                    if grog.verbose {
-                        err_log!("Failed to read line {}: {}", y, e);
+                
+                if let Some(extension) = entry_path.extension() {
+                    if grog.ignored_exts.contains(&extension.to_string_lossy().to_string()) {
+                        if grog.verbose {
+                            let file_name = entry_path.file_name().unwrap().to_string_lossy();
+                            inf_log!(
+                                "> Skipping file with ${} extention: {}",
+                                extension.to_string_lossy(),
+                                file_name
+                            );
+                        }
+                        continue;
                     }
-                    continue;
                 }
-                let line = if grog.ignore_case {
-                    line.unwrap().to_lowercase()
-                } else {
-                    line.unwrap()
+                let f = match fs::File::open(&entry_path) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        if grog.verbose {
+                            err_log!("> Error when opening file: {}", e);
+                        }
+                        continue;
+                    }
                 };
-                let line_len = line.len();
-                let mut lcpy = line.clone();
-                let mut j = 0usize;
-                while let Some(x) = lcpy.find(&grog.query) {
-                    lcpy.drain(..(x + query_len));
-                    let x = if j == 0 { j + x } else { j + x };
-                    j = cmp::min(x + query_len, line_len);
-                    let x = x as isize;
-                    let i = cmp::max(0isize, x - START_PADDING) as usize;
-                    let x = x as usize;
-                    let preface = &line[i..x];
-                    let preface = if i > 0 {
-                        format!("...{}", preface)
+                let f = io::BufReader::new(f);
+                let mut y = 0;
+                for line in f.lines() {
+                    y += 1;
+                    if let Err(e) = line {
+                        if grog.verbose {
+                            err_log!("Failed to read line {}: {}", y, e);
+                        }
+                        continue;
+                    }
+                    let line = if grog.ignore_case {
+                        line.unwrap().to_lowercase()
                     } else {
-                        String::from(preface)
+                        line.unwrap()
                     };
-                    let i = x + query_len;
-                    let showcase = &line[x..i];
-                    let x = i;
-                    let i = cmp::min(x + query_len + END_PADDING, line_len);
-                    let posface = &line[x..i];
-                    let posface = if i < line.len() {
-                        format!("{}...", posface)
-                    } else {
-                        String::from(posface)
-                    };
-                    let x = x + 1;
-                    // &line[0..x];
-                    let displayed = if grog.no_colors {
-                        format!("{}{}{}", preface, showcase, posface)
-                    } else {
-                        format!("{}\x1b[36;1m{}\x1b[0m{}", preface, showcase, posface)
-                    };
-                    println!("{}:{}:{}> {}", entry_path.display(), y, x, displayed);
+                    let line_len = line.len();
+                    let mut lcpy = line.clone();
+                    let mut j = 0usize;
+                    while let Some(x) = lcpy.find(&grog.query) {
+                        lcpy.drain(..(x + query_len));
+                        let x = if j == 0 { j + x } else { j + x };
+                        j = cmp::min(x + query_len, line_len);
+                        let x = x as isize;
+                        let i = cmp::max(0isize, x - START_PADDING) as usize;
+                        let x = x as usize;
+                        let preface = &line[i..x];
+                        let preface = if i > 0 {
+                            format!("...{}", preface)
+                        } else {
+                            String::from(preface)
+                        };
+                        let i = x + query_len;
+                        let showcase = &line[x..i];
+                        let x = i;
+                        let i = cmp::min(x + query_len + END_PADDING, line_len);
+                        let posface = &line[x..i];
+                        let posface = if i < line.len() {
+                            format!("{}...", posface)
+                        } else {
+                            String::from(posface)
+                        };
+                        let x = x + 1;
+                        // &line[0..x];
+                        let displayed = if grog.no_colors {
+                            format!("{}{}{}", preface, showcase, posface)
+                        } else {
+                            format!("{}\x1b[36;1m{}\x1b[0m{}", preface, showcase, posface)
+                        };
+                        println!("{}:{}:{}> {}", entry_path.display(), y, x, displayed);
+                    }
                 }
             }
         }
@@ -306,59 +315,62 @@ fn search_for_query_in_file_names(grog: &mut Grog) -> Option<DirReadFailed> {
     let mut subdirs = Vec::new();
 
     for entry_result in dir_entries {
-        if let Ok(entry) = entry_result {
-            let entry_path = entry.path();
-            // We should always have a filename but if we don't we don't uhhh, move on with life
-            let file_name = entry_path.file_name();
-            if file_name.is_none() {
-                if grog.verbose {
-                    err_log!("Hit a DirEntry with a path of `..`");
-                }
-                continue;
-            }
-            let file_name = file_name
-                .expect("DirEntry should never be `..`")
-                .to_string_lossy()
-                .to_string();
-            let is_dir = entry_path.is_dir();
-            if is_dir {
-                if file_name.starts_with(".") {
+        match entry_result {
+            Err(err) => err_log!("Failed to read dir entry: {}", err),
+            Ok(entry) => {
+                let entry_path = entry.path();
+                // We should always have a filename but if we don't we don't uhhh, move on with life
+                let file_name = entry_path.file_name();
+                if file_name.is_none() {
                     if grog.verbose {
-                        inf_log!("Ignoring dot folder: {}", entry_path.display());
+                        err_log!("Hit a DirEntry with a path of `..`");
                     }
-                } else if grog.recursive {
-                    subdirs.push(entry_path.clone());
+                    continue;
                 }
-            }
-            if !file_name.contains(&grog.query) {
-                continue;
-            }
-            let line = format!("{}", entry_path.display());
-            let line_len = line.len();
-            let mut lcpy = line.clone();
-            let mut j = 0usize;
-            while let Some(x) = lcpy.find(&grog.query) {
-                lcpy.drain(..(x + query_len));
-                let x = if j == 0 { j + x } else { j + x };
-                j = cmp::min(x + query_len, line_len);
-                let x = x as isize;
-                let i = cmp::max(0isize, x - START_PADDING) as usize;
-                let x = x as usize;
-                let preface = String::from(&line[i..x]);
-                let i = x + query_len;
-                let showcase = &line[x..i];
-                let x = i;
-                let i = cmp::min(x + query_len + END_PADDING, line_len);
-                let posface = String::from(&line[x..i]);
-                let x = x + 1;
-                // &line[0..x];
-                let displayed = if grog.no_colors {
-                    format!("{}{}{}", preface, showcase, posface)
-                } else {
-                    format!("{}\x1b[36;1m{}\x1b[0m{}", preface, showcase, posface)
-                };
-                println!("{}> {}", x, displayed);
-            }
+                let file_name = file_name
+                    .expect("DirEntry should never be `..`")
+                    .to_string_lossy()
+                    .to_string();
+                let is_dir = entry_path.is_dir();
+                if is_dir {
+                    if file_name.starts_with(".") {
+                        if grog.verbose {
+                            inf_log!("Ignoring dot folder: {}", entry_path.display());
+                        }
+                    } else if grog.recursive {
+                        subdirs.push(entry_path.clone());
+                    }
+                }
+                if !file_name.contains(&grog.query) {
+                    continue;
+                }
+                let line = format!("{}", entry_path.display());
+                let line_len = line.len();
+                let mut lcpy = line.clone();
+                let mut j = 0usize;
+                while let Some(x) = lcpy.find(&grog.query) {
+                    lcpy.drain(..(x + query_len));
+                    let x = if j == 0 { j + x } else { j + x };
+                    j = cmp::min(x + query_len, line_len);
+                    let x = x as isize;
+                    let i = cmp::max(0isize, x - START_PADDING) as usize;
+                    let x = x as usize;
+                    let preface = String::from(&line[i..x]);
+                    let i = x + query_len;
+                    let showcase = &line[x..i];
+                    let x = i;
+                    let i = cmp::min(x + query_len + END_PADDING, line_len);
+                    let posface = String::from(&line[x..i]);
+                    let x = x + 1;
+                    // &line[0..x];
+                    let displayed = if grog.no_colors {
+                        format!("{}{}{}", preface, showcase, posface)
+                    } else {
+                        format!("{}\x1b[36;1m{}\x1b[0m{}", preface, showcase, posface)
+                    };
+                    println!("{}> {}", x, displayed);
+                }
+            },
         }
     }
 
