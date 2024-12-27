@@ -316,6 +316,11 @@ fn search_for_query_in_file_names(grog: &mut Grog) -> Option<DirReadFailed> {
     const START_PADDING: isize = 20isize;
     const END_PADDING: usize = 35usize;
     let query_len = grog.query.len();
+    let query = if grog.ignore_case {
+        grog.query.to_lowercase()
+    } else {
+        grog.query.clone()
+    };
 
     let mut subdirs = Vec::new();
 
@@ -324,16 +329,7 @@ fn search_for_query_in_file_names(grog: &mut Grog) -> Option<DirReadFailed> {
             Err(err) => err_log!("Failed to read dir entry: {}", err),
             Ok(entry) => {
                 let entry_path = entry.path();
-                // We should always have a filename but if we don't we don't uhhh, move on with life
-                let file_name = entry_path.file_name();
-                if file_name.is_none() {
-                    if grog.verbose {
-                        err_log!("Hit a DirEntry with a path of `..`");
-                    }
-                    continue;
-                }
-                let file_name = file_name
-                    .expect("DirEntry should never be `..`")
+                let file_name = entry.file_name()
                     .to_string_lossy()
                     .to_string();
                 let is_dir = entry_path.is_dir();
@@ -346,12 +342,22 @@ fn search_for_query_in_file_names(grog: &mut Grog) -> Option<DirReadFailed> {
                         subdirs.push(entry_path.clone());
                     }
                 }
-                if !file_name.contains(&grog.query) {
-                    continue;
+                if grog.ignore_case {
+                    if !file_name.to_lowercase().contains(&query) {
+                        continue;
+                    }
+                } else {
+                    if !file_name.contains(&query) {
+                        continue;
+                    }
                 }
                 let line = format!("{}", entry_path.display());
                 let line_len = line.len();
-                let mut lcpy = line.clone();
+                let mut lcpy = if grog.ignore_case {
+                    line.clone().to_lowercase()
+                } else {
+                    line.clone()
+                };
                 let mut j = 0usize;
                 while let Some(x) = lcpy.find(&grog.query) {
                     lcpy.drain(..(x + query_len));
@@ -374,7 +380,7 @@ fn search_for_query_in_file_names(grog: &mut Grog) -> Option<DirReadFailed> {
                         format!("{}\x1b[36;1m{}\x1b[0m{}", preface, showcase, posface)
                     };
                     println!("{}> {}", x, displayed);
-                }
+               }
             },
         }
     }
