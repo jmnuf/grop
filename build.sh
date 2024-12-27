@@ -9,14 +9,14 @@ if ! hash kinoko 2>/dev/null
 then
    echo "[INFO] \`kinoko\` not found, defaulting to \`rustc\`"
    echo "[CMD] rustc src/main.rs -o build/grop"
-   rustc src/main.rs -o build/grop
+   rustc src/main.rs -o build/grop -C opt-level=3
    if ! hash ./build/grop 2>/dev/null
    then
        exit 1
    fi
    ./build/grop -h
 else
-    echo "[CMD] kinoko build -r -- -h"
-    kinoko build -r -- -h
+    echo "[CMD] kinoko build -C opt-level=3 -r -- -h"
+    kinoko build -C opt-level=3 -r -- -h
 fi
 exit 0

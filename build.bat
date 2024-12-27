@@ -7,14 +7,14 @@ IF %ERRORLEVEL% NEQ 0 (
 WHERE /q kinoko
 IF %ERRORLEVEL% NEQ 0 (
    ECHO [INFO] `kinoko` not found, defaulting to `rustc`
-   ECHO [CMD] rustc .\src\main.rs -o .\build\grop.exe
-   rustc src\main.rs -o build\grop.exe
+   ECHO [CMD] rustc .\src\main.rs -o .\build\grop.exe -C opt-level=3
+   rustc src\main.rs -o build\grop.exe -C opt-level=3
    IF %ERRORLEVEL% EQU 0 (
       ECHO [CMD] .\build\grop.exe -h
       .\build\grop.exe -h
    )
    EXIT /b %ERRORLEVEL%
 ) ELSE (
-  ECHO [CMD] kinoko build -r -- -h
-  kinoko build -r -- -h
+  ECHO [CMD] kinoko build -C opt-level=3 -r -- -h
+  kinoko build -C opt-level=3 -r -- -h
 )
