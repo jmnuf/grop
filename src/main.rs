@@ -245,15 +245,20 @@ fn search_for_query_in_file_contents(grog: &mut Grog) -> Option<DirReadFailed> {
                         }
                         continue;
                     }
-                    let line = if grog.ignore_case {
-                        line.unwrap().to_lowercase()
+                    let line = line.unwrap();
+                    let query = if grog.ignore_case {
+                        grog.query.to_lowercase()
                     } else {
-                        line.unwrap()
+                        grog.query.clone()
                     };
                     let line_len = line.len();
-                    let mut lcpy = line.clone();
+                    let mut lcpy = if grog.ignore_case {
+                        line.clone().to_lowercase()
+                    } else {
+                        line.clone()
+                    };
                     let mut j = 0usize;
-                    while let Some(x) = lcpy.find(&grog.query) {
+                    while let Some(x) = lcpy.find(&query) {
                         lcpy.drain(..(x + query_len));
                         let x = if j == 0 { j + x } else { j + x };
                         j = cmp::min(x + query_len, line_len);
