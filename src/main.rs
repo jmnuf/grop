@@ -152,8 +152,8 @@ fn search_for_query(grog: &mut Grog) -> Option<DirReadFailed> {
 	let entry_count = dir_entries.len();
 	inf_log!("Dir Entries Count: {}", entry_count);
     }
-    const START_PADDING:isize = 20isize;
-    const END_PADDING:usize = 35usize;
+    const START_PADDING:isize = 50isize;
+    const END_PADDING:usize = 50usize;
     let query_len = grog.query.len();
 
     let mut subdirs = Vec::new();
@@ -237,7 +237,7 @@ fn search_for_query(grog: &mut Grog) -> Option<DirReadFailed> {
 		    } else {
 			format!("{}\x1b[36;1m{}\x1b[0m{}", preface, showcase, posface)
 		    };
-		    println!("{}:{}:{}> {}", entry_path.display(), y, x, displayed);
+		    println!("{}:{}:{}: {}", entry_path.display(), y, x, displayed);
 		}
 	    }
 	}
